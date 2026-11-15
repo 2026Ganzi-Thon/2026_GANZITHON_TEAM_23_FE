@@ -1,0 +1,142 @@
+# 빌드 및 기기 검증
+
+## 자동 검증 범위
+
+Xcode 27.2 (27B52), 2026-11-15 실행 기준. 모든 빌드는 CODE_SIGNING_ALLOWED=NO.
+
+| 검증 | 결과 |
+|---|---|
+| Xcode 프로젝트 로딩 및 4개 타깃 확인 | 성공 |
+| 기존 GanziWatch Watch App, watchOS Simulator Debug | 성공 |
+| PulseReceiver + 내장 PulseCompanionWatch, iOS Simulator Debug | 성공 |
+| PulseReceiver + 내장 PulseCompanionWatch, 실기기 iOS/watchOS SDK Debug | 성공 (서명 제외) |
+| Swift Package XCTest | 4개 통과, 실패 0 |
+| iPhone Receiver 시뮬레이터 설치·프로세스 실행 | 성공 (통신 기능 미검증) |
+| 기존 Watch-only 앱 시뮬레이터 설치·프로세스 실행 | 성공 (센서 기능 미검증) |
+| 실제 HealthKit 권한·센서·백그라운드 전달·기기 간 통신 | 미검증 |
+| Apple Developer 서명·설치·Archive 배포 | 미검증 |
+
+최초 Xcode 프로젝트 편집 시 새 타깃 ID 누락으로 로딩이 실패했으며 수정 후 성공했다. 샌드박스에서 Xcode/Swift 캐시에 접근하지 못한 실행은 권한 허용 후 재실행했다. Swift 동시성 capture 경고는 수정했으며 남은 AppIntents metadata extraction skipped 경고는 해당 프레임워크를 사용하지 않아 발생한다.
+
+공통 계약 테스트는 macOS에서 실행한다. 실제 HealthKit이나 WCSession 동작 검증을 대신하지 않는다.
+
+```sh
+swift test --package-path wearable --scratch-path /tmp/pulse-contract-build
+xcodebuild -project wearable/GanziWatch/GanziWatch.xcodeproj \
+  -scheme 'GanziWatch Watch App' -configuration Debug \
+  -destination 'generic/platform=watchOS Simulator' \
+  -derivedDataPath /tmp/pulse-watch-build CODE_SIGNING_ALLOWED=NO build
+xcodebuild -project wearable/GanziWatch/GanziWatch.xcodeproj \
+  -scheme PulseReceiver -configuration Debug \
+  -destination 'generic/platform=iOS Simulator' \
+  -derivedDataPath /tmp/pulse-ios-build CODE_SIGNING_ALLOWED=NO build
+xcodebuild -project wearable/GanziWatch/GanziWatch.xcodeproj \
+  -scheme PulseReceiver -configuration Debug -destination 'generic/platform=iOS' \
+  -derivedDataPath /tmp/pulse-device-build CODE_SIGNING_ALLOWED=NO build
+```
+
+실행 로그는 `/tmp/pulse-{watch,ios,device,tests}.log`에 있으며 임시 경로이므로 영구 보존되지 않는다.
+
+## 1. Apple Developer 서명 준비
+
+1. Xcode에서 `wearable/GanziWatch/GanziWatch.xcodeproj`를 연다. 프로젝트 형식은 Xcode 27의 project.xcproj이다.
+2. Xcode Settings → Accounts에서 본인 Apple Developer 계정을 추가한다.
+3. iPhone과 Apple Watch를 페어링하고 개발자 모드를 켠다. iPhone을 Mac에 연결하고 기기 신뢰를 승인한다. Xcode Devices and Simulators에서 워치 연결 및 준비 완료를 확인한다.
+4. `GanziWatch Watch App`, `PulseCompanionWatch`, `PulseReceiver` 및 필요 시 기존 `GanziWatch` 컨테이너의 Signing & Capabilities에서 동일 Team을 선택하고 Automatically manage signing을 켠다. 저장소의 기존 Team ID는 유지했으므로 본인 Team이 다르면 로컬에서 바꾼다.
+5. bundle ID 등록 충돌 시 고유 ID를 사용한다. 통신용 워치 ID는 iPhone ID 아래에 두고 WKCompanionAppBundleIdentifier도 함께 수정한다.
+6. 두 워치 타깃의 HealthKit, Background Delivery가 활성화되어 있는지 확인한다. `CODE_SIGN_ENTITLEMENTS=HealthKit.entitlements`, `com.apple.developer.healthkit=true`, `com.apple.developer.healthkit.background-delivery=true`를 프로젝트에 설정했다. 생성 Info.plist에는 NSHealthShareUsageDescription이 들어간다.
+7. 계정/프로비저닝 프로파일에서 HealthKit entitlement를 허용해야 한다. Xcode 서명 오류가 나면 Developer Portal의 App ID capability와 프로파일을 갱신한다. 이 단계는 사용자 계정에서 수행해야 한다.
+8. 현재 워치 Deployment Target은 기존 프로젝트와 같은 27.2다. 기기 OS가 낮으면 설치 가능한 버전으로 조정 후 빌드한다.
+
+## 2. iPhone 없이 실제 심박 읽기
+
+1. scheme `GanziWatch Watch App`, 실행 대상 실제 Apple Watch를 선택하여 Run.
+2. 워치에서 `HealthKit 읽기 권한`을 누르고 심박수·걸음 수 읽기를 허용한다.
+3. 워치를 착용하고 기본 심박수 앱에서 새 측정을 만든 뒤 PULSE로 돌아와 새로고침한다. PULSE는 센서 측정을 강제로 시작하지 않는다.
+4. 실제 BPM, 마지막 측정 시각, 최근/오래된 표시, 최근 5분 걸음을 확인한다. 기존 데이터는 최초 실행 직전 24시간부터 읽으며 페이지가 순차 처리될 수 있다.
+5. 화면을 닫았다 다시 실행하여 최신 표시·anchor 복구와 중복 방지를 확인한다. 5분 이상 지나 새 샘플이 없으면 오래된 상태가 된다.
+6. 읽기 거부 후 재실행해 오류/신규 데이터 없음 안내를 확인한다. 읽기 거부를 확정 표시하지 않는 것이 정상이다. 건강 앱의 앱 접근 설정에서 재승인한다.
+7. iPhone 앱 미설치일 때는 전송 대기열에 저장되고 iPhone 미설치 상태가 표시된다. 기존 Watch-only 타깃은 Receiver와 통신할 수 없다.
+
+## 3. 실제 iPhone 통신 테스트
+
+1. `PulseReceiver` scheme을 선택하고 실제 페어링된 iPhone에 Run한다.
+2. iPhone의 Watch 앱에서 PULSE companion 설치 상태를 확인한다. 자동 설치되지 않으면 사용 가능한 앱 목록에서 설치한다.
+3. `PulseCompanionWatch` scheme을 실제 페어링된 워치 대상으로 Run한다. 통신 테스트는 이 타깃으로 한다. 화면 모양은 기존 워치 앱과 같으므로 scheme과 bundle ID를 확인한다.
+4. iPhone Receiver와 워치를 열고 양쪽 연결 상태가 활성인지 확인한다. reachable 여부는 앱 상태에 따라 변하며 활성과 즉시 연결은 다르다.
+5. 워치 Debug 화면에서 정상 Mock 전송 → iPhone의 MOCK, BPM, 시간, 걸음, 신규 수신 수를 확인한다.
+6. 워치에 HealthKit 읽기 권한을 주고 새 실제 샘플을 수집 → iPhone에 실제 HealthKit 표시로 수신되는지 확인한다. Mock을 보낸 뒤에는 Mock보다 최신 실제 샘플이 와야 최신 화면이 실제 데이터로 바뀐다.
+7. iPhone 앱을 백그라운드로 보내거나 연결을 끊고 샘플 생성 후 다시 연결한다. 지연 전달을 기다리며 필요하면 새로고침한다. 즉시 수신을 성공 기준으로 삼지 않는다.
+
+## 4. 수동 시나리오 기록표 (아직 실행하지 않음)
+
+| 시나리오 | 조작 / 기대 결과 |
+|---|---|
+| 정상 | 정상 버튼 → 72,74,73; 최근 표시 73, mock 표시 |
+| 급상승 | 급상승 버튼 → 정상 3개 + 108,110,109; 최신 109, steps=0; 워치는 판정·알림하지 않음 |
+| 활동 중 상승 | 활동 버튼 → 높은 심박에도 steps=120 |
+| 걸음 결측 | 걸음 정보 없음 → iPhone에서 null / 알 수 없음, 0이 아님 |
+| 중복 | 중복 버튼 → 같은 sampleId 두 번 enqueue, 신규 수신 수는 1 증가 |
+| 연결 끊김 모의 | 오프라인 모의 ON → Mock 생성 → 대기 증가 → OFF → flush. 이미 WC에 넘긴 전송은 취소되지 않으므로 실제 네트워크 단절 검증과 다름 |
+| 실제 연결 단절 | Bluetooth/Wi-Fi 연결 단절 → Mock/실제 데이터 저장 → 복구·재시도 → 중복 없이 수신 |
+| 앱 재시작 | 전송 대기 중 워치 재실행, iPhone 재실행 → 전송함·최근 샘플·수신 중복 ID 복구 |
+| 오래된 샘플 | 측정 5분 경과 → 오래된 표시; 모바일 통합 시 알림에 사용하지 않음 |
+| 권한 거부 | HealthKit 읽기 거부 → 데이터 없음/오류 안내; 승인 성공으로 잘못 표시하지 않음 |
+| 백그라운드 관찰 | 권한 승인 후 화면 종료 → 기본 심박 앱에서 새 측정 → 이후 PULSE 및 iPhone에서 전달 확인, 지연 기록 |
+| 종료·잠금·절전 | 각 기기 상태별 지연/복구 확인; 강제 종료 상태 즉시 전송 보장하지 않음 |
+
+수신 앱의 카운터는 이번 실행에서 새로 수신한 ID 수이고, 최신 샘플과 중복 ID는 영속 저장된다. 배치 Mock은 UI가 최종 최신값만 보여줄 수 있으므로 카운터 변화도 함께 본다. 이 앱은 전체 수신 이력을 표시하는 앱이 아니다.
+
+## 5. 시뮬레이터 통합 테스트 실행 결과 — 2026-11-15
+
+실제 HealthKit 센서를 사용하지 않고 **Mock 샘플을 실제 WatchConnectivity.sendMessage로 전송하는 테스트**와 **iPhone 앱 내부 Mock 주입 테스트**를 구분해서 실행했다. 아래 성공은 실제 기기의 센서·통신 성공을 의미하지 않는다.
+
+환경은 Xcode 27.2 (27B52), iOS/watchOS 27.2다. 기존 페어 `A1E8276B-3ACE-4585-B6E5-422A1079C772`를 재사용했다.
+
+- iPhone Air: `80CD9174-D192-4BBD-8D3B-718BC8D22D90`
+- Apple Watch Series 12 (42mm): `00F85884-6A4F-4635-AE17-8F8D64ABC827`
+- 최종 페어 상태: active, connected. 두 앱 설치·실행 및 스크린샷 확인 완료.
+- 기존 기기 삭제·초기화·unpair를 하지 않았다. 다른 기존 페어도 유지했다.
+
+| 검증 | 실제 WC sendMessage 수신 | 별도 iPhone Mock 주입 |
+|---|---:|---:|
+| 정상 (72,74,73 BPM / steps=0) | 3/3 일치 | 3/3 일치 |
+| 급상승 (72,74,73,108,110,109 / steps=0) | 6/6 일치 | 6/6 일치 |
+| 활동 중 상승 (동일 BPM / steps=120) | 6/6 일치 | 6/6 일치 |
+| 걸음 결측 null | 이번 WC 배치에서 미검증 | 1/1 일치 |
+| 동일 ID 재주입 | 이번 WC 배치에서 미검증 | 중복 1개 제외, 고유 수신 16개 |
+| 현재 WC 배치 ACK | 15/15 확인 | 해당 없음 |
+| 이전 실행 워치 전송 대기열 복구 | 15/15 수신·ACK 확인 | 해당 없음 |
+
+각 샘플 전체 JSON을 비교했으며 sampleId, bpm, steps, measuredAt, 5분 window, schemaVersion, source가 일치했다. 정상·급상승·활동 시나리오 이름은 입력 데이터의 종류이며 급상승 판정 알고리즘의 테스트 결과가 아니다.
+
+첫 실행은 페어 자체가 connected여도 워치 WCSession activation=0, reachable=false였고 iPhone에서 `counterpart app not installed`, 워치 데몬에서 `ACXErrorDomain Code=43 / App database is out of sync`를 기록했다. 40초 관찰 중 실제 수신은 0개였다. 이 실행에서만 명시적인 iPhone Mock 주입 경로로 수신 처리를 검증했다.
+
+설치 정보가 갱신될 시간을 준 뒤 **빌드·재설치 없이 앱 프로세스만 재실행**하자 실제 sendMessage가 성공했다. 새 15개와 첫 실행 대기열 15개가 전달되어 Receiver 화면의 신규 수신은 30으로 표시된다. 최종 워치 화면은 `활성 · 즉시 연결 · 대기 0`이며, 수신 화면은 `WatchConnectivity.sendMessage`, `109 BPM`, `걸음 120`이다. 재실행 성공만으로 최초 오류의 근본 원인이 완전히 해소되었다고 단정하지 않는다.
+
+첫 실행 결과와 주입 증거는 로컬 `test-results/latest/`에 보관했다. 테스트 JSON·로그·PNG는 커밋에서 제외하므로 GitHub에는 포함되지 않는다.
+
+최종 실제 WC 수신·ACK 기록과 화면은 로컬 `test-results/retry/`에 보관했다. 위 표는 해당 실행 결과의 요약이다.
+
+공통 모델 XCTest 4개를 재실행해 모두 통과했다. 증분 빌드 성공, 남은 경고는 AppIntents 미사용에 따른 metadata extraction skipped뿐이다. 사용자 인터페이스는 저장한 시뮬레이터 스크린샷을 직접 확인했다.
+
+### 자동화 재실행
+
+커밋에 포함된 Debug 실행 지원 코드는 `Shared/SimulatorTestSupport.swift`다. `scripts/simulator_integration.py`는 로컬 테스트 도구로만 유지하고 이번 Swift 소스·프로젝트 설정·문서 커밋에서는 제외했다. 아래 Python 명령은 해당 로컬 파일이 있는 환경에서만 사용할 수 있다. 새 체크아웃에서는 위 빌드·설치 절차와 워치의 Debug 시나리오 버튼으로 테스트한다. Shared 파일은 기존 폴더 타깃 멤버십으로 양쪽 앱에 포함되므로 프로젝트 파일 수정이 필요 없다. DEBUG + simulator + 명시적 실행 인자일 때만 Mock 자동 실행·기록·주입이 활성화된다. 실제 HealthKit 저장소에는 쓰지 않는다.
+
+빌드 결과물이 `/tmp/pulse-ios-build`에 남아 있으면 프로젝트 루트에서 다음 명령만 실행하면 된다. 새 실행의 결과는 별도 폴더에 저장하여 기존 증거를 덮어쓰지 않는다.
+
+```sh
+python3 wearable/scripts/simulator_integration.py \
+  --skip-install --output wearable/test-results/manual-run
+```
+
+앱이 시뮬레이터에 설치되지 않았다면 `--skip-install`을 빼면 된다. 스크립트는 사용 가능한 기존 페어 중 부팅된 페어를 우선 선택하며, 두 앱 설치·실행, 최대 40초 실제 WC 수신·ACK 대조, 실패 시 명시적 Mock 주입, 스크린샷·JSON 저장을 수행한다. **exit code 0만으로 실제 WC 성공을 판단하지 말고 result.json의 actualWatchConnectivity와 injection.performed를 확인한다.** 스크립트는 빌드를 실행하지 않으며, 코드가 바뀐 경우에만 위 빌드 명령으로 증분 빌드한다.
+
+### 제약 및 사용자 직접 작업
+
+- 이번 테스트를 완료하기 위해 사용자가 Xcode에서 직접 해야 할 작업은 없다. 두 시뮬레이터와 앱은 실행 상태로 남겼다.
+- 이 실행 환경에서 `open -a Simulator` 및 Xcode 내부 기본 Simulator.app 경로로 GUI를 여는 것은 앱을 찾지 못해 실패했다. simctl 부팅·실행·캡처는 정상 동작했으며 GUI 열기 실패가 데이터 검증을 막지는 않았다. 화면은 로컬 test-results 폴더의 PNG에서 확인할 수 있다. 본인 Mac의 전체 Xcode GUI에서 확인하려면 **Xcode → Open Developer Tool → Simulator**를 사용한다.
+- transferUserInfo는 Apple 문서상 시뮬레이터 미지원이다. 시뮬레이터에서는 해당 API 호출 대신 대기열을 보존하고 재연결 후 sendMessage로 재시도한다. 이 대기열 복구 성공을 백그라운드 전송 성공으로 해석하지 않는다. [Apple 공식 문서](https://developer.apple.com/documentation/watchconnectivity/wcsession/transferuserinfo(_:))
+- 실제 센서 읽기·HealthKit 승인·실기기 백그라운드 전달·절전/잠금/강제 종료·서명 및 배포는 미검증이다.
+- 모바일 Expo 및 백엔드 파일은 변경하지 않았다.
