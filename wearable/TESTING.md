@@ -46,7 +46,7 @@ xcodebuild -project wearable/GanziWatch/GanziWatch.xcodeproj \
 5. bundle ID 등록 충돌 시 고유 ID를 사용한다. 통신용 워치 ID는 iPhone ID 아래에 두고 WKCompanionAppBundleIdentifier도 함께 수정한다.
 6. 두 워치 타깃의 HealthKit, Background Delivery가 활성화되어 있는지 확인한다. `CODE_SIGN_ENTITLEMENTS=HealthKit.entitlements`, `com.apple.developer.healthkit=true`, `com.apple.developer.healthkit.background-delivery=true`를 프로젝트에 설정했다. 생성 Info.plist에는 NSHealthShareUsageDescription이 들어간다.
 7. 계정/프로비저닝 프로파일에서 HealthKit entitlement를 허용해야 한다. Xcode 서명 오류가 나면 Developer Portal의 App ID capability와 프로파일을 갱신한다. 이 단계는 사용자 계정에서 수행해야 한다.
-8. 현재 워치 Deployment Target은 기존 프로젝트와 같은 27.2다. 기기 OS가 낮으면 설치 가능한 버전으로 조정 후 빌드한다.
+8. 두 워치 타깃의 현재 Deployment Target은 26.0이다. Xcode/SDK 버전 27.2와 앱의 최소 지원 OS 버전은 별개다. 기기 OS가 낮으면 설치 가능한 버전으로 조정 후 빌드한다.
 
 ## 2. iPhone 없이 실제 심박 읽기
 
@@ -140,3 +140,17 @@ python3 wearable/scripts/simulator_integration.py \
 - transferUserInfo는 Apple 문서상 시뮬레이터 미지원이다. 시뮬레이터에서는 해당 API 호출 대신 대기열을 보존하고 재연결 후 sendMessage로 재시도한다. 이 대기열 복구 성공을 백그라운드 전송 성공으로 해석하지 않는다. [Apple 공식 문서](https://developer.apple.com/documentation/watchconnectivity/wcsession/transferuserinfo(_:))
 - 실제 센서 읽기·HealthKit 승인·실기기 백그라운드 전달·절전/잠금/강제 종료·서명 및 배포는 미검증이다.
 - 모바일 Expo 및 백엔드 파일은 변경하지 않았다.
+
+## 6. watchOS 26.0 최소 버전 검증
+
+`GanziWatch Watch App`과 `PulseCompanionWatch`의 `WATCHOS_DEPLOYMENT_TARGET`을 모두 27.2에서 26.0으로 낮췄다. 두 타깃에 공통으로 적용되어 Debug/Release 모두 26.0을 사용한다. Swift 기능 코드와 iOS 타깃 설정은 변경하지 않았다.
+
+- 기존 Watch-only 타깃 시뮬레이터 Debug 빌드: 성공.
+- PulseReceiver와 내장 companion 워치 타깃 시뮬레이터 Debug 빌드: 성공.
+- 두 워치 빌드 제품의 Info.plist `MinimumOSVersion`: 26.0 확인.
+- Swift 계약 XCTest 재실행: 4개 통과, 실패 0.
+- SwiftUI, HealthKit, WatchConnectivity 및 Debug 지원 코드가 watchOS 26.0을 대상으로 컴파일됐다. watchOS 27 전용 API의 무조건 호출로 인한 availability 오류는 없었으며 API 대체나 기능 변경은 필요하지 않았다.
+- Xcode/SDK와 설치된 시뮬레이터 런타임은 27.2다. watchOS 26 런타임은 설치되지 않아 26에서의 실행은 미검증이다. Apple Watch SE 2의 watchOS 26 실기기 설치·서명·권한·센서 동작도 별도 확인이 필요하다.
+- 빌드의 AppIntents metadata extraction skipped 경고는 기존과 동일하다.
+
+이번 검증 로그는 로컬 `/tmp/pulse-watch26-standalone.log`, `/tmp/pulse-watch26-companion.log`, `/tmp/pulse-watch26-tests.log`에 보관하며 커밋 대상이 아니다. 빌드와 테스트 명령은 위의 기존 명령을 사용했다.

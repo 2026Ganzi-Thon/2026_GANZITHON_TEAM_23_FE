@@ -97,7 +97,7 @@
         "SWIFT_VERSION": "5.0",
         "TARGETED_DEVICE_FAMILY": "4",
         "VALIDATE_PRODUCT[config=Release]": "YES",
-        "WATCHOS_DEPLOYMENT_TARGET": "27.2",
+        "WATCHOS_DEPLOYMENT_TARGET": "26.0",
       },
     }, {
       "name": "PulseCompanionWatch",
@@ -139,7 +139,7 @@
         "SWIFT_VERSION": "5.0",
         "TARGETED_DEVICE_FAMILY": "4",
         "VALIDATE_PRODUCT[config=Release]": "YES",
-        "WATCHOS_DEPLOYMENT_TARGET": "27.2",
+        "WATCHOS_DEPLOYMENT_TARGET": "26.0",
       },
     }, {
       "name": "PulseReceiver",
