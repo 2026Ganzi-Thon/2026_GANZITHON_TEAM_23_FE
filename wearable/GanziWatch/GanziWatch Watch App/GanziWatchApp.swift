@@ -1,17 +1,8 @@
-//
-//  GanziWatchApp.swift
-//  GanziWatch Watch App
-//
-//  Created by 이나린 on 11/11/26.
-//
-
 import SwiftUI
 
-@main
-struct GanziWatch_Watch_AppApp: App {
+@main struct GanziWatch_Watch_AppApp: App {
+    @StateObject private var health = HealthService()
     var body: some Scene {
-        WindowGroup {
-            ContentView()
-        }
+        WindowGroup { ContentView(health: health) }
     }
 }
