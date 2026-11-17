@@ -44,8 +44,18 @@ export const createSpikeDetector = (
   /** 샘플을 넣고, 급상승이면 결과를 돌려준다. */
   const push = (sample: HeartRateSample): HeartRateSpike | null => {
     const hasBaseline = baselineSamples.length >= opts.minBaselineSamples;
-    const isMoving = (sample.steps ?? 0) > 0;
+    // 걸음 null(알 수 없음)은 움직임 근거가 없으므로 판정을 막지 않는다.
+    // 서버에는 null 그대로 보내 최종 판단에 쓰게 한다. (0으로 바꾸지 않음)
+    const isMoving = sample.steps !== null && sample.steps > 0;
     const isHigh = hasBaseline && sample.bpm >= baseline() + opts.deltaBpm;
+
+    // 오래된 샘플은 평소 심박 계산에만 쓰고 판정하지 않는다.
+    if (sample.historical) {
+      if (!isHigh) {
+        baselineSamples = [...baselineSamples, sample.bpm].slice(-opts.baselineWindow);
+      }
+      return null;
+    }
 
     if (!isHigh || isMoving) {
       suspectCount = 0;

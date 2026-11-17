@@ -48,12 +48,15 @@ export function HeartRateAlertProvider({ children }: { children: React.ReactNode
 
       reportingRef.current = true;
       try {
-        const result = await reportHeartRateSpike({
+        const report = {
           bpm: spike.bpm,
           baselineBpm: spike.baselineBpm,
           steps: spike.steps,
           measuredAt: new Date(spike.measuredAt).toISOString(),
-        });
+        };
+        if (__DEV__) console.log("[심박] 급상승 감지 → POST /heart-rate/spikes", report);
+        const result = await reportHeartRateSpike(report);
+        if (__DEV__) console.log("[심박] 서버 응답", result);
         if (result.shouldAlert && result.alertId) setAlertId(result.alertId);
         return true;
       } catch (error) {

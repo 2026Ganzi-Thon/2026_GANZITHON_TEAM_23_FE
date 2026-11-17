@@ -8,7 +8,9 @@
     "scheme": "pulse",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "com.ganzithon.team23.PulseReceiver",
+      "appleTeamId": "Z7QR3CP25S"
     },
     "android": {
       "adaptiveIcon": {
