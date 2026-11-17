@@ -6,6 +6,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { getPicture, Picture } from "../api/pictureApi";
+import { MODE_LABEL } from "../api/types";
 import Chip from "../components/common/Chip";
 import PrimaryButton from "../components/common/PrimaryButton";
 import HiddenPictureBoard from "../components/HiddenPictureBoard";
@@ -14,10 +15,12 @@ import ScreenLayout from "../components/ScreenLayout";
 import { COLORS } from "../constants/colors";
 import { TYPO } from "../constants/typography";
 import { withObjectParticle } from "../utils/korean";
+import { parseMode } from "../utils/navigation";
 import { scale } from "../utils/responsive";
 
 export default function FindPictureScreen() {
-  const params = useLocalSearchParams<{ alertId?: string; before?: string }>();
+  const params = useLocalSearchParams<{ alertId?: string; before?: string; mode?: string }>();
+  const mode = parseMode(params.mode);
   const [picture, setPicture] = useState<Picture | null>(null);
   const [foundIds, setFoundIds] = useState<string[]>([]);
   const [loadError, setLoadError] = useState(false);
@@ -25,7 +28,7 @@ export default function FindPictureScreen() {
 
   useEffect(() => {
     let ignore = false;
-    getPicture(params.alertId)
+    getPicture(mode, params.alertId)
       .then((data) => {
         if (ignore) return;
         setPicture(data);
@@ -38,7 +41,7 @@ export default function FindPictureScreen() {
     return () => {
       ignore = true;
     };
-  }, [params.alertId, reloadKey]);
+  }, [mode, params.alertId, reloadKey]);
 
   const reload = () => {
     setLoadError(false);
@@ -53,6 +56,7 @@ export default function FindPictureScreen() {
       pathname: "/rest",
       params: {
         ...params,
+        mode,
         ...(picture ? { pictureId: picture.pictureId } : {}),
       },
     });
@@ -74,7 +78,7 @@ export default function FindPictureScreen() {
       <PageTitle eyebrow="FIND YOUR FOCUS" title="그림을 천천히 살펴봐요" description={description} />
 
       <View style={styles.statusRow}>
-        <Chip label={`${foundIds.length} / ${total} 찾았어요`} />
+        <Chip label={`${MODE_LABEL[mode]} · ${foundIds.length} / ${total} 찾았어요`} />
         <Pressable onPress={goRest} hitSlop={8} accessibilityRole="button">
           <Text style={TYPO.link}>잠시 쉬기</Text>
         </Pressable>

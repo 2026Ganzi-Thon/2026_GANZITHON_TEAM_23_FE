@@ -1,6 +1,7 @@
 // src/utils/navigation.ts
 
 import { router } from "expo-router";
+import type { Mode } from "../api/types";
 
 /** 쌓인 화면을 모두 닫고 첫 화면으로 (로그인 여부에 따라 홈 / 스플래시로 분기) */
 export const goHome = () => {
@@ -14,6 +15,14 @@ export const parseScore = (value: string | string[] | undefined) => {
   const score = Number(raw);
   return score >= 1 && score <= 5 ? (score as 1 | 2 | 3 | 4 | 5) : null;
 };
+
+/** 숨은그림 모드 (기본: 사물 모드) */
+export const parseMode = (value: string | string[] | undefined): Mode => {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return raw === "COLOR" ? "COLOR" : "OBJECT";
+};
+
+export const otherMode = (mode: Mode): Mode => (mode === "COLOR" ? "OBJECT" : "COLOR");
 
 export const parseParam = (value: string | string[] | undefined) => {
   const raw = Array.isArray(value) ? value[0] : value;

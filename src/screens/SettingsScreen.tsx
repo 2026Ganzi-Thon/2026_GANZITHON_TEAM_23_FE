@@ -3,6 +3,7 @@
 
 import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
+import PulseWatch from "../../modules/pulse-watch";
 import { Pressable, StyleSheet, Switch, Text } from "react-native";
 import Card from "../components/common/Card";
 import PrimaryButton from "../components/common/PrimaryButton";
@@ -25,8 +26,20 @@ const OPTIONS: { key: keyof AppSettings; label: string }[] = [
   { key: "soundEnabled", label: "효과음" },
 ];
 
+/** 개발 빌드 확인용: 워치 연결 상태 한 줄 (iOS 개발 빌드에서만) */
+const watchStatusText = () => {
+  if (!__DEV__ || !PulseWatch) return null;
+  const s = PulseWatch.getStatus();
+  if (!s.supported) return "워치: 이 기기에서 지원하지 않음";
+  const yes = (value?: boolean) => (value ? "O" : "X");
+  return `워치: 활성 ${yes(s.activated)} · 페어링 ${yes(s.paired)} · 워치 앱 ${yes(
+    s.watchAppInstalled,
+  )} · 즉시 연결 ${yes(s.reachable)} · 처리 대기 ${s.pendingCount ?? 0}`;
+};
+
 export default function SettingsScreen() {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const [watchStatus] = useState(watchStatusText);
 
   useEffect(() => {
     getSettings().then(setSettings);
@@ -72,6 +85,13 @@ export default function SettingsScreen() {
         </Card>
       ))}
 
+      <Pressable onPress={() => router.push("/my-page")} accessibilityRole="button">
+        <Card>
+          <Text style={TYPO.body}>내 정보 · 보호자</Text>
+          <Text style={TYPO.link}>›</Text>
+        </Card>
+      </Pressable>
+
       <Pressable
         style={styles.logout}
         onPress={handleLogout}
@@ -80,10 +100,13 @@ export default function SettingsScreen() {
       >
         <Text style={TYPO.caption}>로그아웃</Text>
       </Pressable>
+
+      {watchStatus && <Text style={[TYPO.caption, styles.watchStatus]}>{watchStatus}</Text>}
     </ScreenLayout>
   );
 }
 
 const styles = StyleSheet.create({
   logout: { alignSelf: "flex-start", paddingTop: scale(14) },
+  watchStatus: { paddingTop: scale(14) },
 });

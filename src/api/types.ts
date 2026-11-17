@@ -38,5 +38,23 @@ export type ApiErrorCode =
   | "TIMEOUT" // 응답 시간 초과
   | "UNKNOWN"; // 형식을 알 수 없는 오류 응답
 
+// 공통 타입 (API명세서 2.5)
+
 // 마음 점수 (1 편안해요 ~ 5 많이 불안해요)
 export type MoodScore = 1 | 2 | 3 | 4 | 5;
+
+// 숨은그림 모드: COLOR 색 모드 · OBJECT 사물 모드
+export type Mode = "COLOR" | "OBJECT";
+
+// 다음 행동: IMPROVED 나아졌어요 · RETRY 한 번 더 · HELP 도움 요청 ("다른 모드"는 서버 기록 없음)
+export type NextAction = "IMPROVED" | "RETRY" | "HELP";
+
+export interface Guardian {
+  name: string;
+  phone: string; // 숫자만 (01012345678)
+}
+
+export const MODE_LABEL: Record<Mode, string> = {
+  COLOR: "색 모드",
+  OBJECT: "사물 모드",
+};

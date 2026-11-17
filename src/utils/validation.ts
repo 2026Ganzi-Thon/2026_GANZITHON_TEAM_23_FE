@@ -37,7 +37,11 @@ export const validatePassword = (value: string) =>
     ? null
     : `비밀번호는 ${PASSWORD_MIN_LENGTH}자 이상 입력해 주세요.`;
 
-export const validatePasswordConfirm = (password: string, confirm: string) => {
+/** 휴대폰 번호 (하이픈 허용, 숫자만 남겨 검사) */
+export const validatePhone = (value: string) =>
+  /^01\d{8,9}$/.test(value.replace(/\D/g, "")) ? null : "휴대폰 번호를 확인해 주세요.";
+
+export const validatePasswordConfirm =(password: string, confirm: string) => {
   if (!confirm) return "비밀번호를 한 번 더 입력해 주세요.";
   return password === confirm ? null : "비밀번호가 일치하지 않아요.";
 };

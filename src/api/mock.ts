@@ -8,13 +8,15 @@ import type { ApiErrorCode } from "./types";
 
 const MOCK_DEFAULT = process.env.EXPO_PUBLIC_USE_MOCK !== "false";
 
-export type ApiDomain = "auth" | "heartRate" | "picture" | "record";
+// API명세서.md 장(章) 단위
+export type ApiDomain = "auth" | "heartRate" | "picture" | "record" | "user";
 
 export const USE_MOCK: Record<ApiDomain, boolean> = {
-  auth: MOCK_DEFAULT,
-  heartRate: MOCK_DEFAULT,
-  picture: MOCK_DEFAULT,
-  record: MOCK_DEFAULT,
+  auth: MOCK_DEFAULT, // 3장
+  heartRate: MOCK_DEFAULT, // 4장
+  picture: MOCK_DEFAULT, // 5장
+  record: MOCK_DEFAULT, // 6장
+  user: MOCK_DEFAULT, // 7장
 };
 
 /** 실제 서버처럼 약간의 지연 후 data만 돌려준다. (client.ts의 api.* 반환값과 같은 형태) */

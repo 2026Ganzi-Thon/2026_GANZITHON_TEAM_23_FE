@@ -5,6 +5,7 @@ import { router, useFocusEffect } from "expo-router";
 import React, { useCallback, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { ActivityRecord, getRecords } from "../api/recordApi";
+import { MODE_LABEL } from "../api/types";
 import Card from "../components/common/Card";
 import Chip from "../components/common/Chip";
 import PrimaryButton from "../components/common/PrimaryButton";
@@ -60,7 +61,9 @@ export default function RecordsScreen() {
           <Card key={record.recordId}>
             <View style={styles.recordText}>
               <Text style={TYPO.bodyBold}>{record.activityName}</Text>
-              <Text style={TYPO.description}>{formatRecordDate(record.createdAt)}</Text>
+              <Text style={TYPO.description}>
+                {MODE_LABEL[record.mode]} · {formatRecordDate(record.createdAt)}
+              </Text>
             </View>
             <Text style={TYPO.bodyBold}>
               {record.beforeScore ?? "–"} → {record.afterScore}

@@ -1,6 +1,7 @@
 // src/constants/helpContacts.ts
 // 도움 요청 연락처 (와이어프레임 메모: 109 · 1577-0199 · 119, 보호자 문자)
 // 휴대폰 기본 전화 / 문자 앱으로 바로 연결한다.
+// 보호자 번호는 마이페이지(API명세서 7장)에서 등록하며, HelpScreen에서 붙인다.
 
 export interface HelpContact {
   id: string;
@@ -23,11 +24,8 @@ export const HELP_CONTACTS: HelpContact[] = [
     description: "1577-0199",
     url: "tel:15770199",
   },
-  // TODO: 보호자 번호 등록 기능이 생기면 sms:<번호> 로 연결
-  {
-    id: "guardian",
-    label: "보호자에게 문자",
-    description: "문자 앱 열기",
-    url: "sms:",
-  },
 ];
+
+/** 01012345678 → 010-1234-5678 */
+export const formatPhone = (phone: string) =>
+  phone.replace(/^(\d{3})(\d{3,4})(\d{4})$/, "$1-$2-$3");

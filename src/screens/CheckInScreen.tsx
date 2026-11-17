@@ -8,15 +8,17 @@ import PrimaryButton from "../components/common/PrimaryButton";
 import MoodScale from "../components/MoodScale";
 import PageTitle from "../components/PageTitle";
 import ScreenLayout from "../components/ScreenLayout";
+import { parseMode } from "../utils/navigation";
 
 export default function CheckInScreen() {
-  const { alertId } = useLocalSearchParams<{ alertId?: string }>();
+  const { alertId, mode } = useLocalSearchParams<{ alertId?: string; mode?: string }>();
   const [score, setScore] = useState<MoodScore | null>(null);
 
   const handleStart = () => {
     router.push({
       pathname: "/find",
       params: {
+        mode: parseMode(mode),
         ...(alertId ? { alertId } : {}),
         ...(score ? { before: String(score) } : {}),
       },
