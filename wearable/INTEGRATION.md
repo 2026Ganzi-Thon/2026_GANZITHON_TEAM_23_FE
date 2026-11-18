@@ -28,7 +28,7 @@ wearable/
 - `PulseReceiver`: `com.ganzithon.team23.PulseReceiver`, 최소 Swift iOS 테스트 앱.
 - `PulseCompanionWatch`: `com.ganzithon.team23.PulseReceiver.watchkitapp`. 기존 워치 Swift 파일과 Shared를 함께 컴파일한다. Receiver 안에 Watch Content로 내장된다.
 - `WKCompanionAppBundleIdentifier`가 Receiver bundle ID와 일치한다. `WKRunsIndependentlyOfCompanionApp=YES`라 iPhone 앱 없이도 HealthKit을 읽을 수 있다.
-- 기존 watchOS 최소 버전 27.2 유지, Receiver iOS 최소 버전 17.0. 실제 기기 OS가 워치 최소 버전보다 낮으면 두 워치 타깃의 Deployment Target을 설치된 OS에 맞춰 낮추고 다시 빌드한다.
+- 두 워치 타깃의 watchOS 최소 버전은 26.0이며 Receiver iOS 최소 버전은 17.0이다. 실제 기기 OS가 워치 최소 버전보다 낮으면 두 워치 타깃의 Deployment Target을 설치된 OS에 맞춰 낮추고 다시 빌드한다.
 
 ## 메시지 계약 v1
 
@@ -145,3 +145,46 @@ Apple 공식 참고: [HealthKit 설정](https://developer.apple.com/documentatio
 수신 앱 화면과 기록의 `WatchConnectivity.sendMessage`는 실제 WC delegate 수신이고 `SIMULATOR MOCK INJECTION · WC 아님`은 iPhone 내부 주입이다. Debug 자동 실행은 UI의 시나리오 버튼과 동일한 enqueue/수신 검증 함수를 사용하되 버튼 탭 자체를 자동화하지 않는다. 시뮬레이터의 미지원 transferUserInfo 경로는 대기열에 남기며 reachable 이후 sendMessage로 재시도한다. 실기기 전송 구현은 기존 transferUserInfo를 유지한다.
 
 실행 명령·최종 결과·오류 및 로컬 화면 보관 위치는 [TESTING.md 5절](TESTING.md#5-시뮬레이터-통합-테스트-실행-결과--2026-11-15)을 참고한다.
+
+## Expo 통합 구현 (2026-11-18)
+
+통합 브랜치의 저장소 루트에 `origin/feat/mobile-app`의 Expo SDK 58 소스를 가져왔다. 기존 워치와 임시 Receiver는 그대로 유지하며, Expo 앱은 별도의 `com.ganzithon.team23.pulse` Bundle ID를 사용한다. config plugin `plugins/withPulseWatch.js`는 Expo iOS 앱 안에 `PulseExpoWatch` (`com.ganzithon.team23.pulse.watchkitapp`)를 생성하고 기존 wearable Swift 파일·HealthKit entitlement를 복사한다. 최소 watchOS 26.0 / iOS 17.0이다. 원래 `PulseCompanionWatch` → `PulseReceiver` 테스트 관계는 변경하지 않았다.
+
+네이티브 연결은 `modules/pulse-watch` 로컬 Expo Module이다. AppDelegate subscriber가 JS 시작 전 WCSession을 활성화한다. 수신 데이터는 Application Support의 보호된 파일에 원자적으로 저장한 뒤 워치에 sampleId ACK를 보낸다. Swift 모델은 기존 `wearable/Shared/HeartRateSample.swift`를 symlink로 재사용한다. 최대 2,000개 pending과 최근 10,000개 ID를 관리하며 저장 실패/한도 초과 시 성공 ACK를 보내지 않는다. 실제 건강 샘플은 테스트 감사 로그에 기록하지 않는다. 수신함은 앱 기능을 위한 영속 데이터이며 테스트 로그가 아니다.
+
+`watchSource.ts`는 native pending을 시각순으로 정렬해 하나씩 처리하고 처리 성공 후 acknowledge한다. 실패한 샘플과 뒤의 샘플은 수신함에 남겨 5초 후 또는 foreground 복귀 시 재시도한다. 이미 처리된 시각보다 늦게 도착한 과거 샘플은 판정을 다시 쓰지 않고 무시한다. 이는 무제한 재정렬이 아니라 보수적인 late-drop 정책이다.
+
+감지 정책:
+
+- measuredAt ISO 8601 → timestamp 밀리초, schema/window 검증 후 처리.
+- 각 샘플의 steps는 직전 **5분** 합계다. 의심 구간의 3개 샘플 모두 명시적으로 steps=0이어야 한다. null·활동량 양수는 연속 카운트를 끊고 baseline에도 넣지 않는다.
+- 정상 baseline 최소 5개, 최근 정상 30개 평균, +25 BPM 이상 3개 연속, 10분 쿨다운.
+- 측정 후 5분 초과 또는 30초 넘게 미래인 샘플은 검출에 사용하지 않는다. sampleId 중복과 이미 처리한 시각 이하 샘플을 제외한다.
+- source=mock은 실서비스 검출기에서 거부한다. 출처 변경 시 baseline을 초기화해 Mock과 HealthKit을 섞지 않는다.
+- API가 성공 응답을 반환한 경우에만 쿨다운을 확정한다. shouldAlert=false도 성공 보고이므로 쿨다운을 소비한다. API 실패는 해당 후보를 재시도 가능하게 하고 native inbox에서 제거하지 않는다. 실제 검출기 쿨다운은 AsyncStorage에 저장해 재시작 시 복구한다. 서버 멱등성 키가 없는 현재 API에서는 서버 성공 직후 앱 크래시가 발생하는 경계의 exactly-once 보고를 보장하지 않는다.
+
+`HeartRateAlertProvider`와 `heartRateApi`의 기존 흐름 및 `GentleAlertSheet` UI를 유지한다. 로그인·활동·기록 화면은 변경하지 않았다. 기존 앱 내 Mock 시연도 별도 검출기로 유지한다.
+
+### 개발 실행 및 테스트 구분
+
+```sh
+npm ci
+npx expo prebuild --platform ios
+npx expo run:ios
+npm run test:heart-rate
+npx tsc --noEmit
+npx expo lint
+swift test --package-path wearable
+```
+
+`ios/`는 생성물이다. config plugin만 변경하고 생성된 프로젝트를 손으로 관리하지 않는다. `prebuild --clean` 전에는 기존 native 수정과 로컬 diff를 반드시 보존해야 한다. 이번 구현은 기존 ios 폴더가 없는 상태를 확인하고 로컬 diff를 `/tmp/pulse-integration-before.patch`에 보존한 뒤 시작했다. --clean을 직접 실행하지 않았다. 이후 plugin 재실행으로 소스 갱신 및 타깃 그래프 멱등성을 확인했다.
+
+`eas.json` development 프로필은 개발 클라이언트·시뮬레이터용이다. 실기기 프로필과 서명은 별도 구성한다. 테스트 스크립트 `scripts/watch-expo-e2e.py`는 정상 페어의 Expo 앱과 새 워치 앱을 사용하고 **실제 WC sendMessage만** 검증한다. 직접 JS/네이티브 Mock 주입은 사용하지 않는다. `tests/heart-rate.test.mjs`는 감지·스키마·수신 처리·Mock API의 독립 단위 테스트이며 실제 통신 성공을 의미하지 않는다.
+
+시뮬레이터 DEBUG 앱에 명시적으로 `--pulse-integration-test <run-id>`를 전달한 경우에만 워치 Mock과 Mock API를 통한 종단 간 시연을 허용한다. 이 모드만 로그인 토큰 없이 심박→Mock API→기존 모달 경로를 테스트하며 `--pulse-api-no-alert`로 shouldAlert=false를 검증할 수 있다. 실기기·Release에서는 해당 실행 인자가 테스트 모드를 켜지 못한다. 일반 실행은 로그인·사용자 알림 설정·실데이터 정책을 따른다. 감사 파일은 이 모드에서 Mock ID와 단계명만 저장한다.
+
+앱 종료 상태 시스템 알림, 실제 센서, 실기기 HealthKit 권한, 백그라운드 실시간 검출은 이번 단계의 검증 대상이 아니다. JS가 정지하면 native 수신함에 보관했다가 다음 실행에서 drain하며 실시간 알림을 약속하지 않는다.
+
+### 최신 모바일 코드 동기화
+
+`origin/feat/mobile-app`의 `7cff89c` API·활동 모드·마이페이지 기능과 통합했다. 중복 네이티브 수신기는 단일 영속 수신함으로 정리했고 기존 워치 타깃·Bundle ID를 유지했다. 상세 선택과 로그인 Keychain 서명 수정은 [MOBILE_SYNC.md](MOBILE_SYNC.md)를 참고한다. 시뮬레이터 로그인 검증에는 ad-hoc 서명을 허용한 Development Build를 사용하며 `CODE_SIGNING_ALLOWED=NO`로 만든 과거 테스트 빌드는 로그인 시연용으로 사용하지 않는다.

@@ -37,4 +37,14 @@ final class HeartRateSampleTests: XCTestCase {
         XCTAssertFalse(sample.isStale(at: now.addingTimeInterval(300)))
         XCTAssertTrue(sample.isStale(at: now.addingTimeInterval(301)))
     }
+    func testSpikeFixtureCanReachDetectorWithFiveRecentBaselineSamples() {
+        let now = Date(timeIntervalSince1970: 1800000000)
+        let samples = MockScenario.spike.samples(at: now)
+        XCTAssertGreaterThanOrEqual(samples.count, 8)
+        let baseline = samples.prefix(5).map(\.bpm)
+        let average = baseline.reduce(0, +) / Double(baseline.count)
+        XCTAssertTrue(samples.suffix(3).allSatisfy { $0.bpm >= average + 25 })
+        XCTAssertTrue(samples.allSatisfy { $0.steps == 0 && $0.isMock && !$0.isStale(at: now) })
+    }
+
 }

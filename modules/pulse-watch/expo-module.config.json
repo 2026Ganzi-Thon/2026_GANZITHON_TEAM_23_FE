@@ -1,0 +1,13 @@
+{
+  "platforms": [
+    "apple"
+  ],
+  "apple": {
+    "modules": [
+      "PulseWatchModule"
+    ],
+    "appDelegateSubscribers": [
+      "PulseWatchAppDelegateSubscriber"
+    ]
+  }
+}
