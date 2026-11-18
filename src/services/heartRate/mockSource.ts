@@ -21,6 +21,8 @@ export const createMockHeartRateSource = (): HeartRateSource => ({
         return;
       }
       onSample({
+        sampleId: `demo-${Date.now()}-${index}`,
+        source: "mock",
         bpm: SUBWAY_SCENARIO_BPM[index],
         steps: 0,
         timestamp: Date.now(),

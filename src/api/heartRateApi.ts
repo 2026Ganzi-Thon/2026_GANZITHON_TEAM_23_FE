@@ -3,6 +3,7 @@
 // - 애플워치 → 앱으로 들어온 심박을 앱이 계속 보다가, 급상승을 감지했을 때만 서버로 보낸다.
 // - 서버가 알림을 띄울지 판단해 alertId를 내려주면 08 부담 없는 알림을 띄운다.
 
+import PulseWatch from "../../modules/pulse-watch";
 import { api } from "./client";
 import { mockResolve, USE_MOCK } from "./mock";
 
@@ -22,8 +23,10 @@ export interface HeartRateSpikeResult {
 export const reportHeartRateSpike = async (
   report: HeartRateSpikeReport,
 ): Promise<HeartRateSpikeResult> => {
-  if (USE_MOCK.heartRate) {
-    return mockResolve({ shouldAlert: true, alertId: `mock-alert-${Date.now()}` });
+  const test = PulseWatch?.getTestOptions();
+  if (test?.enabled || USE_MOCK.heartRate) {
+    const shouldAlert = test?.enabled ? test.shouldAlert : true;
+    return mockResolve({ shouldAlert, alertId: shouldAlert ? `mock-alert-${Date.now()}` : null });
   }
   return api.post<HeartRateSpikeResult>("/heart-rate/spikes", report);
 };

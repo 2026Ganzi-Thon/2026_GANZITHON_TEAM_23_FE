@@ -6,6 +6,8 @@
 //     - 바로 시작 → 09 활동 전 상태 → 숨은그림찾기
 //     - 괜찮아요 → 서버에 알림 거절 전달(기준값 상향) → 14 활동 기록
 
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import PulseWatch from "../../modules/pulse-watch";
 import { router } from "expo-router";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { dismissAlert, reportHeartRateSpike } from "../api/heartRateApi";
@@ -32,59 +34,63 @@ export const useHeartRateAlert = () => useContext(HeartRateAlertContext);
 
 export function HeartRateAlertProvider({ children }: { children: React.ReactNode }) {
   const [alertId, setAlertId] = useState<string | null>(null);
-  const watchDetectorRef = useRef<SpikeDetector>(createSpikeDetector());
+  const test = PulseWatch?.getTestOptions();
+  const cooldownKey = test?.enabled ? `pulse.cooldown.test.${test.run}` : "pulse.cooldown.healthKit";
+  const watchDetectorRef = useRef<SpikeDetector>(createSpikeDetector({ allowMock: test?.enabled === true }));
   const reportingRef = useRef(false);
   const stopMockRef = useRef<(() => void) | null>(null);
 
   /** 샘플 하나를 처리하고, 급상승을 서버에 보고했으면 true */
   const processSample = useCallback(
     async (detector: SpikeDetector, sample: HeartRateSample, ignoreSettings = false) => {
-      const spike = detector.push(sample);
-      if (!spike || reportingRef.current) return false;
-
-      const [token, settings] = await Promise.all([getAccessToken(), getSettings()]);
-      if (!token) return false; // 로그인 전에는 보내지 않음
-      if (!settings.alertsEnabled && !ignoreSettings) return false;
-
+      if (reportingRef.current) throw new Error("Reporting in progress");
       reportingRef.current = true;
       try {
-        const report = {
-          bpm: spike.bpm,
-          baselineBpm: spike.baselineBpm,
-          steps: spike.steps,
-          measuredAt: new Date(spike.measuredAt).toISOString(),
-        };
-        if (__DEV__) console.log("[심박] 급상승 감지 → POST /heart-rate/spikes", report);
-        const result = await reportHeartRateSpike(report);
-        if (__DEV__) console.log("[심박] 서버 응답", result);
-        if (result.shouldAlert && result.alertId) setAlertId(result.alertId);
-        return true;
-      } catch (error) {
-        console.warn("심박 급상승 보고 실패:", error);
-        return false;
-      } finally {
-        reportingRef.current = false;
-      }
+        const [token, settings] = await Promise.all([getAccessToken(), getSettings()]);
+        if (!token && !test?.enabled) throw new Error("Login required; keep samples in inbox");
+        if (!settings.alertsEnabled && !ignoreSettings) return false;
+        if (sample.source === "mock" && test?.enabled && !test.run.startsWith("manual-") && !sample.sampleId.startsWith(`mock-${test.run}-`)) return false;
+        if (sample.source === 'mock') PulseWatch?.recordTestEvent('jsReceived', sample.sampleId);
+        const spike = detector.push(sample);
+        if (!spike) return false;
+        try {
+          const result = await reportHeartRateSpike({
+            bpm: spike.bpm, baselineBpm: spike.baselineBpm, steps: spike.steps,
+            measuredAt: new Date(spike.measuredAt).toISOString(),
+          });
+          const confirmedAt = detector.confirmReport();
+          if (detector === watchDetectorRef.current) await AsyncStorage.setItem(cooldownKey, String(confirmedAt)).catch(() => {});
+          if (sample.source === 'mock') PulseWatch?.recordTestEvent(result.shouldAlert ? 'apiShouldAlertTrue' : 'apiShouldAlertFalse', sample.sampleId);
+          if (result.shouldAlert && result.alertId) {
+            setAlertId(result.alertId);
+            if (sample.source === 'mock') PulseWatch?.recordTestEvent('alertRequested', sample.sampleId);
+          }
+          return true;
+        } catch (error) { detector.reportFailed(); throw error; }
+      } finally { reportingRef.current = false; }
     },
-    [],
+    [cooldownKey, test?.enabled, test?.run],
   );
 
-  // 실제 워치 데이터 구독
-  useEffect(
-    () =>
-      watchHeartRateSource.subscribe((sample) => {
-        void processSample(watchDetectorRef.current, sample);
-      }),
-    [processSample],
-  );
+  // Restore cooldown before draining native inbox; cleanup also handles async setup.
+  useEffect(() => {
+    let disposed = false;
+    let stop: (() => void) | undefined;
+    void AsyncStorage.getItem(cooldownKey).then(saved => {
+      if (disposed) return;
+      watchDetectorRef.current = createSpikeDetector({ allowMock: test?.enabled === true, initialLastReportedAt: saved ? Number(saved) : -Infinity });
+      stop = watchHeartRateSource.subscribe(async sample => { await processSample(watchDetectorRef.current, sample); });
+    });
+    return () => { disposed = true; stop?.(); };
+  }, [cooldownKey, test?.enabled, processSample]);
 
   const runMockScenario = useCallback(() => {
     stopMockRef.current?.();
-    const detector = createSpikeDetector(); // 시연마다 새로 (쿨다운 영향 없음)
+    const detector = createSpikeDetector({ allowMock: true }); // 시연마다 독립 검출기
     const stop = createMockHeartRateSource().subscribe((sample) => {
       void processSample(detector, sample, true).then((reported) => {
         if (reported) stop();
-      });
+      }).catch(() => {});
     });
     stopMockRef.current = stop;
   }, [processSample]);

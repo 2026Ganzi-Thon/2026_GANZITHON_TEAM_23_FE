@@ -42,10 +42,10 @@ struct HeartRateSample: Codable, Equatable, Identifiable {
 enum MockScenario: String, CaseIterable {
     case normal = "정상", spike = "급상승", active = "활동 중 상승", missing = "걸음 정보 없음", duplicate = "중복 샘플"
     func samples(at now: Date = Date()) -> [HeartRateSample] {
-        let values: [Double] = self == .normal ? [72,74,73] : [72,74,73,108,110,109]
+        let values: [Double] = self == .normal ? [72,74,73,75,72] : [72,74,73,75,72,108,110,109]
         let samples = values.enumerated().map { index, bpm in
             HeartRateSample(id: "mock-\(UUID().uuidString)", bpm: bpm,
-                            at: now.addingTimeInterval(Double(index - values.count + 1) * 60),
+                            at: now.addingTimeInterval(Double(index - values.count + 1) * 10),
                             steps: self == .missing ? nil : (self == .active ? 120 : 0), source: "mock")
         }
         return self == .duplicate ? [samples[0], samples[0]] : samples

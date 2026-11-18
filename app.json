@@ -9,7 +9,7 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon",
-      "bundleIdentifier": "com.ganzithon.team23.PulseReceiver",
+      "bundleIdentifier": "com.ganzithon.team23.pulse",
       "appleTeamId": "Z7QR3CP25S"
     },
     "android": {
@@ -35,7 +35,8 @@
           "imageWidth": 76
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "./plugins/withPulseWatch"
     ],
     "experiments": {
       "typedRoutes": true,

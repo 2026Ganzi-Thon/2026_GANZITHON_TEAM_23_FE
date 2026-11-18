@@ -4,7 +4,7 @@
 import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
 import PulseWatch from "../../modules/pulse-watch";
-import { Pressable, StyleSheet, Switch, Text } from "react-native";
+import { AppState, Pressable, StyleSheet, Switch, Text } from "react-native";
 import Card from "../components/common/Card";
 import PrimaryButton from "../components/common/PrimaryButton";
 import PageTitle from "../components/PageTitle";
@@ -27,9 +27,9 @@ const OPTIONS: { key: keyof AppSettings; label: string }[] = [
 ];
 
 /** 개발 빌드 확인용: 워치 연결 상태 한 줄 (iOS 개발 빌드에서만) */
-const watchStatusText = () => {
+const watchStatusText = async () => {
   if (!__DEV__ || !PulseWatch) return null;
-  const s = PulseWatch.getStatus();
+  const s = await PulseWatch.getStatus();
   if (!s.supported) return "워치: 이 기기에서 지원하지 않음";
   const yes = (value?: boolean) => (value ? "O" : "X");
   return `워치: 활성 ${yes(s.activated)} · 페어링 ${yes(s.paired)} · 워치 앱 ${yes(
@@ -39,7 +39,14 @@ const watchStatusText = () => {
 
 export default function SettingsScreen() {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
-  const [watchStatus] = useState(watchStatusText);
+  const [watchStatus, setWatchStatus] = useState<string | null>(null);
+  useEffect(() => {
+    let disposed = false;
+    const refresh = () => { void watchStatusText().then(text => { if (!disposed) setWatchStatus(text); }).catch(() => {}); };
+    refresh();
+    const listener = AppState.addEventListener('change', state => { if (state === 'active') refresh(); });
+    return () => { disposed = true; listener.remove(); };
+  }, []);
 
   useEffect(() => {
     getSettings().then(setSettings);

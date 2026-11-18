@@ -1,38 +1,33 @@
-// modules/pulse-watch
-// 애플워치 → 아이폰 심박 수신 네이티브 모듈 (iOS 전용)
-// Android / 웹 / Expo Go에는 모듈이 없으므로 null이다. (requireOptionalNativeModule)
-
-import { NativeModule, requireOptionalNativeModule } from "expo";
-
-/** 워치 메시지 계약 v1 (wearable/INTEGRATION.md) */
-export interface WatchHeartRateSample {
-  schemaVersion: 1;
-  sampleId: string;
-  bpm: number;
-  measuredAt: string; // UTC ISO 8601
-  steps: number | null; // null = 알 수 없음 (0과 다름)
-  stepsWindowStart: string;
-  stepsWindowEnd: string;
-  source: "healthKit" | "mock";
-}
-
+import { requireOptionalNativeModule } from 'expo-modules-core';
+import type { WatchHeartRateSample } from '../../src/services/heartRate/types';
+export type { WatchHeartRateSample } from '../../src/services/heartRate/types';
 export interface WatchStatus {
   supported: boolean;
-  activated?: boolean;
+  activated: boolean;
+  reachable: boolean;
   paired?: boolean;
   watchAppInstalled?: boolean;
-  reachable?: boolean;
+  installed: boolean;
   pendingCount?: number;
 }
-
-type PulseWatchEvents = {
-  onHeartRateSample: (sample: WatchHeartRateSample) => void;
+type NativeWatch = {
+  getPending(): Promise<WatchHeartRateSample[]>;
+  acknowledge(ids: string[]): Promise<void>;
+  getStatus(): Promise<WatchStatus>;
+  getTestOptions(): { enabled: boolean; run: string; shouldAlert: boolean };
+  recordTestEvent(event: string, sampleId: string): void;
+  addListener(name: string, listener: () => void): { remove(): void };
 };
-
-declare class PulseWatchModule extends NativeModule<PulseWatchEvents> {
-  getPendingSamples(): Promise<WatchHeartRateSample[]>;
-  markProcessed(sampleIds: string[]): void;
-  getStatus(): WatchStatus;
-}
-
-export default requireOptionalNativeModule<PulseWatchModule>("PulseWatch");
+const native = requireOptionalNativeModule<NativeWatch>('PulseWatch');
+// One receiver/delegate/inbox. Legacy names adapt to the same async durable API.
+const watch = native ? {
+  getPending: () => native.getPending(),
+  getPendingSamples: () => native.getPending(),
+  acknowledge: (ids: string[]) => native.acknowledge(ids),
+  markProcessed: (ids: string[]) => native.acknowledge(ids),
+  getStatus: () => native.getStatus(),
+  getTestOptions: () => native.getTestOptions(),
+  recordTestEvent: (event: string, id: string) => native.recordTestEvent(event, id),
+  addListener: (name: string, listener: () => void) => native.addListener(name, listener),
+} : null;
+export default watch;

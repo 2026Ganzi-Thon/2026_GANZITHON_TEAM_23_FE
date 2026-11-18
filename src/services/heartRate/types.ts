@@ -1,16 +1,33 @@
-// src/services/heartRate/types.ts
-
 export interface HeartRateSample {
+  sampleId: string;
   bpm: number;
-  steps: number | null; // 측정 구간 걸음 수 (null = 알 수 없음, 0과 다름)
-  timestamp: number; // 측정 시각 (ms)
-  historical?: boolean; // 오래된 샘플: 평소 심박 계산에만 쓰고 알림은 내지 않음
+  steps: number | null; // Fully contained HealthKit step samples in preceding five minutes.
+  timestamp: number;
+  source: 'healthKit' | 'mock';
+  historical?: boolean; // Compatibility: explicit historical input is never used to detect.
 }
-
-/**
- * 심박 데이터 공급원
- * subscribe는 구독 해제 함수를 돌려준다.
- */
+export interface WatchHeartRateSample {
+  schemaVersion: 1;
+  sampleId: string;
+  bpm: number;
+  measuredAt: string;
+  steps: number | null;
+  stepsWindowStart: string;
+  stepsWindowEnd: string;
+  source: 'healthKit' | 'mock';
+}
 export interface HeartRateSource {
-  subscribe(onSample: (sample: HeartRateSample) => void): () => void;
+  subscribe(onSample: (sample: HeartRateSample) => void | Promise<void>): () => void;
+}
+export function decodeWatchSample(value: unknown): HeartRateSample | null {
+  const s = value as Partial<WatchHeartRateSample> | null;
+  if (!s || s.schemaVersion !== 1 || typeof s.sampleId !== 'string' || !s.sampleId ||
+      typeof s.bpm !== 'number' || !Number.isFinite(s.bpm) || s.bpm <= 0 ||
+      !(s.steps === null || (Number.isInteger(s.steps) && s.steps! >= 0)) ||
+      !['healthKit', 'mock'].includes(s.source ?? '') || typeof s.measuredAt !== 'string') return null;
+  const timestamp = Date.parse(s.measuredAt);
+  const start = Date.parse(s.stepsWindowStart ?? '');
+  const end = Date.parse(s.stepsWindowEnd ?? '');
+  if (!Number.isFinite(timestamp) || end !== timestamp || end - start !== 300000) return null;
+  return { sampleId: s.sampleId, bpm: s.bpm, steps: s.steps!, timestamp, source: s.source! };
 }

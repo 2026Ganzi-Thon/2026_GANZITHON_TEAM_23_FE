@@ -1,21 +1,15 @@
 Pod::Spec.new do |s|
-  s.name           = 'PulseWatch'
-  s.version        = '1.0.0'
-  s.summary        = 'Receives Apple Watch heart-rate samples over WatchConnectivity'
-  s.description    = 'Receives Apple Watch heart-rate samples over WatchConnectivity'
-  s.author         = ''
-  s.homepage       = 'https://docs.expo.dev/modules/'
-  s.platforms      = { :ios => '16.4' }
-  s.swift_version  = '5.9'
-  s.source         = { git: '' }
+  s.name = 'PulseWatch'
+  s.version = '1.0.0'
+  s.summary = 'PULSE WatchConnectivity receiver'
+  s.description = 'Persistent inbox and Expo events for the PULSE companion watch.'
+  s.license = { :type => 'MIT' }
+  s.author = 'PULSE'
+  s.homepage = 'https://github.com/2026Ganzi-Thon/2026_GANZITHON_TEAM_23_FE'
+  s.source = { :git => s.homepage }
+  s.platform = :ios, '17.0'
+  s.swift_version = '5.0'
   s.static_framework = true
-
   s.dependency 'ExpoModulesCore'
-  s.frameworks = 'WatchConnectivity'
-
-  s.source_files = "**/*.{h,m,swift}"
-  s.pod_target_xcconfig = {
-    'DEFINES_MODULE' => 'YES',
-    'SWIFT_COMPILATION_MODE' => 'wholemodule'
-  }
+  s.source_files = '**/*.swift'
 end
