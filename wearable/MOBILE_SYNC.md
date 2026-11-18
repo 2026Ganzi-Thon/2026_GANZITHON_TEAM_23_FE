@@ -38,3 +38,11 @@ xcodebuild -workspace ios/pulse.xcworkspace -scheme pulse -configuration Debug \
 ## 검증
 
 최종 실행 결과와 미검증 범위는 [TESTING.md](TESTING.md)의 모바일 동기화 검증 절을 참고한다. 테스트 산출물과 백업은 커밋 대상이 아니다.
+
+## PR #4 main 병합 충돌 해결
+
+`origin/main`의 `1490853`을 통합 브랜치에 merge했다. main은 모바일 `7cff89c`를 포함하므로 최신 모바일 API/화면 내용은 기존 동기화 결과와 같았다. 두 브랜치의 독립적인 파일 추가 이력으로 15개 add/add 충돌과 공유 Swift 모델의 regular-file/symlink 타입 충돌이 발생했다.
+
+충돌 블록을 비교해 main의 UI·API·Team·빌드 프로필을 보존하면서 통합 계약을 적용했다. 대상은 `.gitignore`, `app.json`, `eas.json`, `package.json`, 모듈의 config/index/podspec/Swift 구현, `heartRateApi`, Provider, Settings의 비동기 상태 표시, mockSource/types/watchSource/spikeDetector다. 검증된 공유 모델 symlink는 유지했다. main의 별도 AppDelegate/WatchReceiver는 단일 수신기와 충돌하므로 해당 역할을 기존 `PulseWatchAppDelegateSubscriber`/`PulseInbox`로 통합했다. 공유 모델의 임시 충돌 사본은 제거했다. 원본은 병합 전 `/tmp/pulse-pr4-before-merge-20261118-144335/integration.bundle` 및 임시 Swift 백업에 보존했다.
+
+main의 README와 기존 설정 파일은 그대로 반영했다. main에 이미 추적되던 `.env`는 공개 API URL/Mock 설정 두 항목이며 수정하지 않았다. 검증용 Metro에는 프로세스 환경 `EXPO_PUBLIC_USE_MOCK=true`를 명시해 실제 백엔드 호출을 피한다. 이는 앱의 워치 Mock 허용 플래그가 아니다. 워치 Mock 감지는 Debug 시뮬레이터 + 명시적 실행 인자에서만 활성화되는 기존 정책을 유지한다.

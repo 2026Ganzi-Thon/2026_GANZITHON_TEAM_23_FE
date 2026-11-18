@@ -241,3 +241,17 @@ python3 scripts/watch-expo-e2e.py \
 제품 코드와 분리한 `/tmp/PulseUIAutomation`의 XCUITest **2/2 성공**: 실제 WC로 표시된 알림에서 ‘바로 시작’ → ‘그림 찾기 시작’ → 최신 그라운딩 화면, 일반 실행의 저장된 로그인 복구 → 기록 → 설정 → 마이페이지 이름/닉네임/보호자 입력 화면을 확인했다. 앞선 로그인 UI 실행에서는 실제 Mock 로그인 제출 및 홈 진입을 확인했으나 화면 아래 기록 버튼 탭에서 실패했다. 스크롤을 포함한 재검사로 해결했고 제품 UI는 수정하지 않았다.
 
 최초 Swift 테스트는 sandbox 캐시 접근 제한으로 실행되지 않았으나 권한 있는 환경에서 위 5개를 다시 실행해 통과했다. 실제 백엔드, 실제 센서/기기, watchOS 26 런타임 실행, 종료 상태 시스템 알림 및 백그라운드 실시간 감지는 검증하지 않았다. 서명 빌드는 27.2 SDK 시뮬레이터에서 수행했다. merge commit/일반 commit/push는 만들지 않았다.
+
+## 9. PR #4 origin/main 병합 후 재검증
+
+`1490853` main을 통합 브랜치에 병합한 후 검증했다. 충돌 정책은 [MOBILE_SYNC.md](MOBILE_SYNC.md)의 PR #4 절에 기록했다. main 대비 연동과 무관한 모바일 화면/API 차이는 없음을 파일 단위로 확인했다.
+
+- `npm ci --no-audit --no-fund`: 803개 패키지 설치 성공, lockfile 변경 없음. 첫 sandbox 설치는 캐시 쓰기 권한으로 실패해 정상 권한에서 재실행했다.
+- `npx tsc --noEmit`, `npm run lint`: 성공. `npm run test:heart-rate`: 18/18, Swift 계약 테스트: 5/5 성공.
+- `pulse` + `PulseExpoWatch` Debug 시뮬레이터 서명 빌드 성공. 첫 시도는 npm 재설치 중 의존 파일 부재로 실패했으며 설치 완료 후 재빌드로 해결했다. 생성 iOS 프로젝트를 수동 수정하거나 clean prebuild하지 않았다.
+- 기존 iPhone 17 + 전용 Watch Series12 페어에 새 빌드를 설치했다. 일반 실행의 native testOptions.enabled=false, Mock API 도메인 모두 true를 실행 중 JS에서 확인했다. Metro는 `EXPO_PUBLIC_USE_MOCK=true` 프로세스 환경으로 실행했다.
+- 별도의 임시 XCUITest에서 실제 로그인 화면에 합성 아이디/비밀번호를 입력해 Mock 로그인 → SecureStore 저장 → 홈 이동 성공 (1/1). 처음에는 딥링크 iOS 열기 확인창에 막혔으나 테스트 도구가 확인창을 처리하도록 고쳐 통과했다. 제품 인증/UI 코드는 변경하지 않았다.
+- 실제 WC 7/7 시나리오 성공: 정상 5, 활동 8, 결측 8, 과거 8, 중복 6, shouldAlert=false 8, shouldAlert=true 8. 총 51개 고유 sendMessage/네이티브 수신/JS/워치 ACK의 sampleId 집합이 각각 정확히 일치했다. 직접 아이폰/JS 수신함 주입은 사용하지 않았다. shouldAlert=true에서만 기존 GentleAlertSheet가 표시됐다.
+- 추가 XCUITest 2/2: WC 알림 → 바로 시작 → 그림 찾기, 일반 로그인 복구 → 기록 → 설정 → 최신 마이페이지/보호자 화면 확인.
+
+결과는 Git 제외 `wearable/test-results/pr4-merge-e2e/`, 빌드/테스트 로그는 `/tmp/pulse-pr4-*`에 있다. 실제 백엔드, 실기기 센서, watchOS 26 런타임 및 백그라운드/종료 상태 실시간 실행은 검증 범위 밖이다. 테스트 완료 후 main 자체나 다른 작업 브랜치에 직접 커밋/푸시하거나 PR을 직접 병합하지 않는다.
